@@ -1,0 +1,4 @@
+interface:
+  display_name: "게임DA 뉴스레터 조사"
+  short_description: "최신 게임DA 자료를 조사해 Notion과 Slack에 정리합니다"
+  default_prompt: "$game-da-newsletter-research를 사용해 최신 한국어 게임DA 자료를 조사하고 Notion과 Slack에 정리해 주세요."
