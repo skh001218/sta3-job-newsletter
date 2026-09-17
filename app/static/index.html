@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>게임 DA 실전 문제</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">GAME DATA ANALYSIS · PRACTICE</p>
+      <h1>실제 결과를 보기 전에<br>당신의 판단을 남겨보세요.</h1>
+      <p class="intro">정답을 맞히는 테스트가 아니라, 불완전한 정보 안에서 어떤 가정을 세우고 판단했는지 기록하는 공간입니다.</p>
+    </header>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+    <section id="loading" class="card loading">문제를 불러오는 중…</section>
+
+    <section id="answer-view" class="card" hidden>
+      <div class="step"><span>01</span> 판단 기록</div>
+      <p id="question-source" class="source"></p>
+      <h2 id="question-title"></h2>
+      <p id="question-scenario" class="scenario"></p>
+      <h3 id="question-prompt"></h3>
+      <form id="answer-form">
+        <fieldset>
+          <legend class="sr-only">선택지</legend>
+          <div id="options" class="options"></div>
+        </fieldset>
+        <div class="grid">
+          <label>
+            <span>선택 이유</span>
+            <textarea name="reason" rows="5" maxlength="10000" required placeholder="어떤 지표와 맥락을 가장 중요하게 봤나요?"></textarea>
+          </label>
+          <label>
+            <span>예상되는 결과</span>
+            <textarea name="expected_outcome" rows="5" maxlength="10000" required placeholder="이 선택 후 어떤 변화를 예상하나요?"></textarea>
+          </label>
+        </div>
+        <label>
+          <span>판단할 때 세운 가정</span>
+          <textarea name="assumptions" rows="4" maxlength="10000" required placeholder="자료에 없지만 참이라고 가정한 내용을 적어주세요."></textarea>
+        </label>
+        <label class="confidence">
+          <span>확신도 <output id="confidence-output">50%</output></span>
+          <input name="confidence" type="range" min="0" max="100" value="50">
+        </label>
+        <p class="lock-note">확정한 답변은 수정할 수 없으며, 다시 풀면 새로운 시도로 기록됩니다.</p>
+        <button id="submit-button" class="primary" type="submit">답변 확정하고 실제 결과 보기</button>
+      </form>
+    </section>
+
+    <section id="result-view" hidden>
+      <article class="card frozen">
+        <div class="step"><span>02</span> 잠긴 내 답변</div>
+        <h2 id="frozen-title"></h2>
+        <div id="frozen-answer" class="detail-grid"></div>
+      </article>
+
+      <article class="card result-card">
+        <div class="step"><span>03</span> 실제 결과와 비교</div>
+        <div id="comparison"></div>
+        <div id="evidence"></div>
+      </article>
+
+      <div class="actions">
+        <button id="complete-button" class="primary" type="button">완료하고 Notion에 저장</button>
+        <button id="retry-button" class="secondary" type="button" hidden>다시 저장</button>
+        <a id="notion-link" class="secondary link-button" target="_blank" rel="noreferrer" hidden>Notion에서 보기</a>
+        <button id="new-attempt-button" class="text-button" type="button">새로운 시도로 다시 풀기</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <form method="dialog" class="confirm-box">
+      <p class="eyebrow">답변 확정</p>
+      <h2 id="confirm-title">이 답변을 잠글까요?</h2>
+      <p>확정한 답변은 수정할 수 없습니다. 다시 풀면 새로운 시도로 저장됩니다.</p>
+      <div class="actions">
+        <button id="confirm-submit" class="primary" type="button">확정하고 결과 보기</button>
+        <button id="confirm-cancel" class="secondary" type="button">돌아가기</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,54 @@
+{
+  "questions": [
+    {
+      "id": "sample-retention-001",
+      "version": 1,
+      "active": true,
+      "title": "7일차 이탈 징후에 대응하기",
+      "scenario": "신규 이벤트 출시 후 1일차 재방문율은 유지되지만 7일차 재방문율이 4%p 하락했습니다. 이벤트 참여자의 플레이 시간은 초반 3일간 증가했고, 결제율은 큰 변화가 없습니다. 한 주 내에 다음 액션을 제안해야 합니다.",
+      "prompt": "가장 먼저 취할 조치는 무엇입니까?",
+      "options": [
+        {"id": "A", "label": "보상을 즉시 상향하고 이벤트를 연장한다."},
+        {"id": "B", "label": "코호트와 이벤트 진행 단계별 이탈을 분해해 원인을 확인한다."},
+        {"id": "C", "label": "전체 사용자에게 복귀 푸시 알림을 추가한다."}
+      ],
+      "answer_fields": ["reason", "expected_outcome", "assumptions", "confidence"],
+      "source": {
+        "title": "샘플 자료—실제 뉴스레터 문제로 교체해 주세요",
+        "publisher": "샘플",
+        "url": "https://example.com",
+        "notion_page_id": ""
+      },
+      "reveal": {
+        "actual_action": "이벤트 참여 시점과 진행 단계를 기준으로 코호트를 나누고, 4~6일차 특정 단계에서 이탈이 집중되는지 확인했습니다.",
+        "actual_outcome": "보상 확장보다 진행 동선을 단축하는 A/B 테스트를 먼저 실행했고, 테스트 코호트의 7일차 재방문율이 회복되었습니다.",
+        "metrics": ["7일차 재방문율 +3.1%p", "이벤트 완주율 +8.4%"],
+        "evidence_links": [
+          {"label": "샘플 원문", "url": "https://example.com"}
+        ]
+      },
+      "evaluation": {
+        "rubric_version": 1,
+        "by_option": {
+          "A": {
+            "well_considered": ["단기 참여 동기가 부족할 가능성을 고려했습니다."],
+            "missing_considerations": ["보상 부족이 원인인지 확인하기 전에 전체 보상을 늘리면 비용과 경제 균형에 영향을 줄 수 있습니다."],
+            "reasonable_despite_outcome": ["할인·보상 민감도가 이미 확인된 사용자군이라면 빠른 가설 검증으로 합리적일 수 있습니다."]
+          },
+          "B": {
+            "well_considered": ["결과 지표를 바로 최적화하기 전에 이탈이 발생하는 구간과 대상을 특정했습니다."],
+            "missing_considerations": ["분석에 사용할 노출 기준과 코호트 편향을 미리 점검하면 더 좋습니다."],
+            "reasonable_despite_outcome": ["사례의 실제 접근과 가장 가깝지만, 제시된 자료만으로 유일한 정답이라고 단정할 수는 없습니다."]
+          },
+          "C": {
+            "well_considered": ["이탈 후 재접점을 만드는 방법을 고려했습니다."],
+            "missing_considerations": ["전체 푸시는 이탈 원인을 해소하지 못하고 피로도를 높일 수 있으므로 대상·시점 실험이 필요합니다."],
+            "reasonable_despite_outcome": ["이미 푸시 수신 동의와 메시지별 효과가 검증된 상태라면 보조 수단으로 적절할 수 있습니다."]
+          }
+        },
+        "unknown_from_evidence": ["코호트 규모와 통계적 유의성", "동시기 다른 콘텐츠 변경의 영향"],
+        "next_questions": ["이탈이 가장 크게 발생한 진행 단계는 어디인가?", "비참여자 코호트에서도 같은 하락이 나타났는가?"]
+      }
+    }
+  ]
+}
