@@ -1,0 +1,14 @@
+[agents]
+max_concurrent_threads_per_session = 3
+
+[agents.reseacher-official]
+description = "게임DA와 관련된 자료와 근거를 조사하는 에이전트"
+config_file = "agents/reseacher-official.toml"
+
+[agents.reseacher-unofficial]
+description = "게임DA와 관련된 자료와 근거를 조사하는 에이전트"
+config_file = "agents/reseacher-unofficial.toml"
+
+[agents.check]
+description = "게임DA와 관련된 자료와 근거를 검수하는 에이전트"
+config_file = "agents/check.toml"
