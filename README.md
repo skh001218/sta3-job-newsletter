@@ -37,6 +37,18 @@ python -m app
 
 `data/questions.json`에 문제를 추가합니다. `reveal`과 `evaluation`은 서버에서만 읽고 문제 조회 API에서는 제외됩니다. 이미 풀이한 문제를 수정할 때는 기존 버전을 바꾸지 말고 `version`을 증가시키세요. 각 시도에는 제출 당시 문제·결과·출처 스냅샷이 남습니다.
 
+## 공통 계약
+
+후속 UI·평가·Notion 기능은 `app/contracts.py`의 타입과 상태값을 공통 경계로 사용합니다.
+
+- `contract_version`: HTTP 응답 형식의 버전입니다. 필드를 제거하거나 의미를 바꾸는 호환성 파괴 변경에서만 증가시킵니다.
+- `question.version`: 문제 내용의 버전입니다. 시나리오, 선택지, 실제 결과 또는 평가 기준을 바꾸면 증가시킵니다.
+- `attempt_id`: 한 번 확정된 풀이를 식별하며 기존 풀이를 덮어쓰는 데 사용하지 않습니다.
+- `idempotency_key`: 동일한 제출이나 외부 저장 요청의 중복 실행을 막습니다.
+- `AttemptStatus`와 `PersistenceStatus`: 브라우저·평가 서비스·Notion 저장기가 공유하는 상태값입니다.
+
+공개 질문 응답에는 `reveal`과 `evaluation`이 없어야 하며, 확정된 답변 원문은 비교 결과나 외부 저장 실패와 관계없이 SQLite에 유지되어야 합니다.
+
 ## 테스트
 
 ```powershell

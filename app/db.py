@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from .contracts import PersistenceStatus
+
 
 SCHEMA = """
 PRAGMA journal_mode = WAL;
@@ -56,9 +58,10 @@ class Database:
             connection.execute(
                 """
                 UPDATE notion_syncs
-                SET status = 'RETRY', last_error = 'Server restarted during synchronization'
-                WHERE status = 'SYNCING'
-                """
+                SET status = ?, last_error = 'Server restarted during synchronization'
+                WHERE status = ?
+                """,
+                (PersistenceStatus.RETRY.value, PersistenceStatus.SYNCING.value),
             )
 
     @contextmanager

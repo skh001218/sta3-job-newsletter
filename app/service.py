@@ -7,6 +7,14 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from .contracts import (
+    API_CONTRACT_VERSION,
+    AttemptAnswer,
+    AttemptStatus,
+    AttemptView,
+    ComparisonResult,
+    PublicQuestion,
+)
 from .db import Database
 from .questions import QuestionError, QuestionRepository
 
@@ -38,14 +46,14 @@ class AttemptService:
         self.db = db
         self.questions = questions
 
-    def get_public_question(self, question_id: str | None = None) -> dict[str, Any]:
+    def get_public_question(self, question_id: str | None = None) -> PublicQuestion:
         try:
             question = self.questions.get(question_id) if question_id else self.questions.current()
         except QuestionError as exc:
             raise ServiceError(str(exc), 404) from exc
         return self.questions.public_view(question)
 
-    def submit(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def submit(self, payload: dict[str, Any]) -> AttemptView:
         idempotency_key = self._required_text(payload, "idempotency_key", 200)
         question_id = self._required_text(payload, "question_id", 200)
         try:
@@ -88,7 +96,7 @@ class AttemptService:
                 INSERT INTO attempts (
                     id, idempotency_key, request_hash, question_id, question_version,
                     question_snapshot, response_json, status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'SUBMITTED', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     attempt_id,
@@ -98,6 +106,7 @@ class AttemptService:
                     version,
                     canonical_json(question),
                     canonical_json(normalized),
+                    AttemptStatus.SUBMITTED.value,
                     created_at,
                 ),
             )
@@ -110,18 +119,18 @@ class AttemptService:
             # 보존하고 비교 생성만 재시도할 수 있게 현재 상태를 반환한다.
             return self.get(attempt_id)
 
-    def retry_comparison(self, attempt_id: str) -> dict[str, Any]:
+    def retry_comparison(self, attempt_id: str) -> AttemptView:
         attempt = self.get(attempt_id)
-        if attempt["status"] == "COMPARISON_READY":
+        if attempt["status"] == AttemptStatus.COMPARISON_READY:
             return attempt
         return self._generate_comparison(attempt_id)
 
-    def _generate_comparison(self, attempt_id: str) -> dict[str, Any]:
+    def _generate_comparison(self, attempt_id: str) -> AttemptView:
         with self.db.connect() as connection:
             row = connection.execute("SELECT * FROM attempts WHERE id = ?", (attempt_id,)).fetchone()
         if not row:
             raise ServiceError("풀이 기록을 찾을 수 없습니다.", 404)
-        if row["status"] == "COMPARISON_READY":
+        if row["status"] == AttemptStatus.COMPARISON_READY:
             return self._serialize(row)
 
         try:
@@ -129,7 +138,7 @@ class AttemptService:
             response = json.loads(row["response_json"])
             evaluation = question["evaluation"]
             choice = evaluation.get("by_option", {}).get(response["selected_option"], {})
-            comparison = {
+            comparison: ComparisonResult = {
                 "actual_action": question["reveal"]["actual_action"],
                 "actual_outcome": question["reveal"]["actual_outcome"],
                 "metrics": question["reveal"].get("metrics", []),
@@ -147,23 +156,28 @@ class AttemptService:
                 connection.execute(
                     """
                     UPDATE attempts
-                    SET comparison_json = ?, status = 'COMPARISON_READY',
+                    SET comparison_json = ?, status = ?,
                         comparison_ready_at = ?, last_error = NULL
                     WHERE id = ?
                     """,
-                    (canonical_json(comparison), ready_at, attempt_id),
+                    (
+                        canonical_json(comparison),
+                        AttemptStatus.COMPARISON_READY.value,
+                        ready_at,
+                        attempt_id,
+                    ),
                 )
                 connection.commit()
         except Exception as exc:
             with self.db.connect() as connection:
                 connection.execute(
-                    "UPDATE attempts SET status = 'COMPARISON_FAILED', last_error = ? WHERE id = ?",
-                    (str(exc)[:1000], attempt_id),
+                    "UPDATE attempts SET status = ?, last_error = ? WHERE id = ?",
+                    (AttemptStatus.COMPARISON_FAILED.value, str(exc)[:1000], attempt_id),
                 )
             raise ServiceError("답변은 저장되었지만 비교 결과를 만들지 못했습니다.", 500) from exc
         return self.get(attempt_id)
 
-    def get(self, attempt_id: str) -> dict[str, Any]:
+    def get(self, attempt_id: str) -> AttemptView:
         with self.db.connect() as connection:
             row = connection.execute("SELECT * FROM attempts WHERE id = ?", (attempt_id,)).fetchone()
             sync = connection.execute(
@@ -177,9 +191,10 @@ class AttemptService:
         return result
 
     @staticmethod
-    def _serialize(row: sqlite3.Row) -> dict[str, Any]:
+    def _serialize(row: sqlite3.Row) -> AttemptView:
         snapshot = json.loads(row["question_snapshot"])
         result = {
+            "contract_version": API_CONTRACT_VERSION,
             "attempt_id": row["id"],
             "status": row["status"],
             "created_at": row["created_at"],
@@ -195,22 +210,29 @@ class AttemptService:
         return result
 
     @classmethod
-    def _normalize_response(cls, response: dict[str, Any], question: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_response(
+        cls, response: dict[str, Any], question: dict[str, Any]
+    ) -> AttemptAnswer:
         selected = cls._required_text(response, "selected_option", 200)
         valid_options = {option["id"] for option in question["options"]}
         if selected not in valid_options:
             raise ServiceError("올바른 선택지를 골라 주세요.")
-        normalized = {"selected_option": selected}
-        for field in ("reason", "expected_outcome", "assumptions"):
-            normalized[field] = cls._required_text(response, field, 10000)
+        reason = cls._required_text(response, "reason", 10000)
+        expected_outcome = cls._required_text(response, "expected_outcome", 10000)
+        assumptions = cls._required_text(response, "assumptions", 10000)
         try:
             confidence = int(response.get("confidence"))
         except (TypeError, ValueError) as exc:
             raise ServiceError("확신도는 0~100 숫자여야 합니다.") from exc
         if confidence < 0 or confidence > 100:
             raise ServiceError("확신도는 0~100 범위여야 합니다.")
-        normalized["confidence"] = confidence
-        return normalized
+        return {
+            "selected_option": selected,
+            "reason": reason,
+            "expected_outcome": expected_outcome,
+            "assumptions": assumptions,
+            "confidence": confidence,
+        }
 
     @staticmethod
     def _required_text(payload: dict[str, Any], field: str, max_length: int) -> str:

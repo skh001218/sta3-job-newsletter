@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .config import Settings
+from .contracts import AttemptStatus, PersistenceStatus
 from .db import Database
 from .service import AttemptService, ServiceError, canonical_json, utc_now
 
@@ -190,7 +191,7 @@ class NotionSyncService:
 
     def enqueue(self, attempt_id: str, idempotency_key: str) -> dict[str, Any]:
         attempt = self.attempts.get(attempt_id)
-        if attempt["status"] != "COMPARISON_READY":
+        if attempt["status"] != AttemptStatus.COMPARISON_READY:
             raise ServiceError("비교 결과를 확인한 뒤 저장할 수 있습니다.", 409)
         now = utc_now()
         with self.db.connect() as connection:
@@ -207,13 +208,13 @@ class NotionSyncService:
                     """
                     INSERT INTO notion_syncs
                     (attempt_id, idempotency_key, status, next_retry_at, updated_at)
-                    VALUES (?, ?, 'PENDING', ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
-                    (attempt_id, idempotency_key, now, now),
+                    (attempt_id, idempotency_key, PersistenceStatus.PENDING.value, now, now),
                 )
                 connection.execute(
-                    "UPDATE attempts SET completed_at = ?, notion_status = 'PENDING' WHERE id = ?",
-                    (now, attempt_id),
+                    "UPDATE attempts SET completed_at = ?, notion_status = ? WHERE id = ?",
+                    (now, PersistenceStatus.PENDING.value, attempt_id),
                 )
             connection.commit()
         self.sync_once(attempt_id)
@@ -226,19 +227,19 @@ class NotionSyncService:
             ).fetchone()
             if not row:
                 raise ServiceError("저장 요청을 찾을 수 없습니다.", 404)
-            if row["status"] == "SAVED":
+            if row["status"] == PersistenceStatus.SAVED:
                 return self.attempts.get(attempt_id)
             connection.execute(
                 """
                 UPDATE notion_syncs
-                SET status = 'PENDING', retry_count = 0, next_retry_at = ?, last_error = NULL, updated_at = ?
+                SET status = ?, retry_count = 0, next_retry_at = ?, last_error = NULL, updated_at = ?
                 WHERE attempt_id = ?
                 """,
-                (utc_now(), utc_now(), attempt_id),
+                (PersistenceStatus.PENDING.value, utc_now(), utc_now(), attempt_id),
             )
             connection.execute(
-                "UPDATE attempts SET notion_status = 'PENDING', last_error = NULL WHERE id = ?",
-                (attempt_id,),
+                "UPDATE attempts SET notion_status = ?, last_error = NULL WHERE id = ?",
+                (PersistenceStatus.PENDING.value, attempt_id),
             )
         self.sync_once(attempt_id)
         return self.attempts.get(attempt_id)
@@ -249,29 +250,32 @@ class NotionSyncService:
             sync = connection.execute(
                 "SELECT * FROM notion_syncs WHERE attempt_id = ?", (attempt_id,)
             ).fetchone()
-            if not sync or sync["status"] not in {"PENDING", "RETRY"}:
+            pending_statuses = {PersistenceStatus.PENDING, PersistenceStatus.RETRY}
+            if not sync or sync["status"] not in pending_statuses:
                 connection.commit()
-                return bool(sync and sync["status"] == "SAVED")
+                return bool(sync and sync["status"] == PersistenceStatus.SAVED)
             if sync["retry_count"] >= self.settings.max_retries:
                 connection.execute(
-                    "UPDATE notion_syncs SET status = 'FAILED', updated_at = ? WHERE attempt_id = ?",
-                    (utc_now(), attempt_id),
+                    "UPDATE notion_syncs SET status = ?, updated_at = ? WHERE attempt_id = ?",
+                    (PersistenceStatus.FAILED.value, utc_now(), attempt_id),
                 )
                 connection.execute(
-                    "UPDATE attempts SET notion_status = 'FAILED' WHERE id = ?", (attempt_id,)
+                    "UPDATE attempts SET notion_status = ? WHERE id = ?",
+                    (PersistenceStatus.FAILED.value, attempt_id),
                 )
                 connection.commit()
                 return False
             retry_count = sync["retry_count"] + 1
             connection.execute(
                 """
-                UPDATE notion_syncs SET status = 'SYNCING', retry_count = ?, updated_at = ?
+                UPDATE notion_syncs SET status = ?, retry_count = ?, updated_at = ?
                 WHERE attempt_id = ?
                 """,
-                (retry_count, utc_now(), attempt_id),
+                (PersistenceStatus.SYNCING.value, retry_count, utc_now(), attempt_id),
             )
             connection.execute(
-                "UPDATE attempts SET notion_status = 'SYNCING' WHERE id = ?", (attempt_id,)
+                "UPDATE attempts SET notion_status = ? WHERE id = ?",
+                (PersistenceStatus.SYNCING.value, attempt_id),
             )
             connection.commit()
 
@@ -293,26 +297,30 @@ class NotionSyncService:
                 connection.execute(
                     """
                     UPDATE notion_syncs
-                    SET status = 'SAVED', next_retry_at = NULL, last_error = NULL, updated_at = ?
+                    SET status = ?, next_retry_at = NULL, last_error = NULL, updated_at = ?
                     WHERE attempt_id = ?
                     """,
-                    (now, attempt_id),
+                    (PersistenceStatus.SAVED.value, now, attempt_id),
                 )
                 connection.execute(
                     """
                     UPDATE attempts
-                    SET notion_status = 'SAVED', notion_page_id = ?, notion_block_id = ?,
+                    SET notion_status = ?, notion_page_id = ?, notion_block_id = ?,
                         notion_url = ?, last_error = NULL
                     WHERE id = ?
                     """,
-                    (page_id, block_id, notion_url, attempt_id),
+                    (PersistenceStatus.SAVED.value, page_id, block_id, notion_url, attempt_id),
                 )
                 connection.commit()
             return True
         except NotionError as exc:
             delay = exc.retry_after or min(3600, 2 ** min(retry_count, 10))
             next_retry = (datetime.now(UTC) + timedelta(seconds=delay)).isoformat(timespec="seconds")
-            status = "RETRY" if exc.transient and retry_count < self.settings.max_retries else "FAILED"
+            status = (
+                PersistenceStatus.RETRY
+                if exc.transient and retry_count < self.settings.max_retries
+                else PersistenceStatus.FAILED
+            )
             with self.db.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
@@ -321,11 +329,17 @@ class NotionSyncService:
                     SET status = ?, next_retry_at = ?, last_error = ?, updated_at = ?
                     WHERE attempt_id = ?
                     """,
-                    (status, next_retry if status == "RETRY" else None, str(exc)[:1000], utc_now(), attempt_id),
+                    (
+                        status.value,
+                        next_retry if status == PersistenceStatus.RETRY else None,
+                        str(exc)[:1000],
+                        utc_now(),
+                        attempt_id,
+                    ),
                 )
                 connection.execute(
                     "UPDATE attempts SET notion_status = ?, last_error = ? WHERE id = ?",
-                    (status, str(exc)[:1000], attempt_id),
+                    (status.value, str(exc)[:1000], attempt_id),
                 )
                 connection.commit()
             return False
@@ -336,11 +350,11 @@ class NotionSyncService:
             rows = connection.execute(
                 """
                 SELECT attempt_id FROM notion_syncs
-                WHERE status IN ('PENDING', 'RETRY')
+                WHERE status IN (?, ?)
                   AND (next_retry_at IS NULL OR next_retry_at <= ?)
                 ORDER BY updated_at ASC LIMIT 10
                 """,
-                (now,),
+                (PersistenceStatus.PENDING.value, PersistenceStatus.RETRY.value, now),
             ).fetchall()
         for row in rows:
             self.sync_once(row["attempt_id"])
