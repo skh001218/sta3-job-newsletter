@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from app.config import Settings
+from app.contracts import API_CONTRACT_VERSION
 from app.db import Database
 from app.notion import NotionSyncService, build_attempt_toggle
 from app.questions import QuestionRepository
@@ -41,6 +42,7 @@ class AttemptServiceTest(unittest.TestCase):
         }
 
     def test_public_question_never_contains_reveal(self) -> None:
+        self.assertEqual(API_CONTRACT_VERSION, self.question["contract_version"])
         self.assertNotIn("reveal", self.question)
         self.assertNotIn("evaluation", self.question)
         serialized = json.dumps(self.question, ensure_ascii=False)
@@ -49,6 +51,7 @@ class AttemptServiceTest(unittest.TestCase):
     def test_submit_is_idempotent(self) -> None:
         first = self.service.submit(self.payload())
         second = self.service.submit(self.payload())
+        self.assertEqual(API_CONTRACT_VERSION, first["contract_version"])
         self.assertEqual(first["attempt_id"], second["attempt_id"])
         self.assertEqual("COMPARISON_READY", first["status"])
         self.assertTrue(first["comparison"])

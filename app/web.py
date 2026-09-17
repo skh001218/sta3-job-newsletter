@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from .config import Settings
+from .contracts import PersistenceStatus
 from .db import Database
 from .notion import NotionSyncService, NotionSyncWorker
 from .questions import QuestionRepository
@@ -88,12 +89,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if not isinstance(key, str) or not key.strip():
                     raise ServiceError("idempotency_key가 필요합니다.")
                 result = self.server.notion.enqueue(match.group(1), key.strip())
-                status = HTTPStatus.OK if result["notion_status"] == "SAVED" else HTTPStatus.ACCEPTED
+                status = (
+                    HTTPStatus.OK
+                    if result["notion_status"] == PersistenceStatus.SAVED
+                    else HTTPStatus.ACCEPTED
+                )
                 return self._json(result, status)
             match = NOTION_RETRY_ROUTE.match(path)
             if match:
                 result = self.server.notion.retry(match.group(1))
-                status = HTTPStatus.OK if result["notion_status"] == "SAVED" else HTTPStatus.ACCEPTED
+                status = (
+                    HTTPStatus.OK
+                    if result["notion_status"] == PersistenceStatus.SAVED
+                    else HTTPStatus.ACCEPTED
+                )
                 return self._json(result, status)
             return self._json({"error": "API 경로를 찾을 수 없습니다."}, HTTPStatus.NOT_FOUND)
         except ServiceError as exc:
