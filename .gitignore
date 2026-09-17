@@ -1,0 +1,6 @@
+# 로컬 비밀 설정
+.env
+
+# Python 실행 캐시
+__pycache__/
+*.py[cod]
