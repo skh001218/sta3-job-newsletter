@@ -106,6 +106,48 @@ class AttemptServiceTest(unittest.TestCase):
         self.assertIn(f"attempt:{attempt['attempt_id']}", title)
         self.assertLessEqual(len(toggle["toggle"]["children"]), 100)
 
+        children = toggle["toggle"]["children"]
+        headings = [
+            child[child["type"]]["rich_text"][0]["text"]["content"]
+            for child in children
+            if child["type"].startswith("heading_")
+        ]
+        self.assertEqual(
+            ["상황", "내 답변", "선택한 이유", "실제 답과 내 답변의 차이와 고려해볼 점"],
+            headings,
+        )
+        reveal = next(child for child in children if child["type"] == "toggle")
+        self.assertEqual(
+            "실제 결과와 관점 전환 보기",
+            reveal["toggle"]["rich_text"][0]["text"]["content"],
+        )
+        reveal_headings = [
+            child[child["type"]]["rich_text"][0]["text"]["content"]
+            for child in reveal["toggle"]["children"]
+            if child["type"].startswith("heading_")
+        ]
+        self.assertEqual(
+            ["실제 사례", "추천 판단", "관점 전환", "내 답과 비교하기", "다음에 가져갈 질문", "참조"],
+            reveal_headings,
+        )
+
+    def test_notion_toggle_supports_attempts_without_new_template_fields(self) -> None:
+        attempt = self.service.submit(self.payload())
+        for field in (
+            "recommended_option",
+            "recommendation_reason",
+            "perspective_before",
+            "perspective_after",
+        ):
+            attempt["comparison"].pop(field, None)
+        attempt["question"]["source"].pop("published_at", None)
+        attempt["question"]["source"].pop("evidence_level", None)
+
+        toggle = build_attempt_toggle(attempt)
+        reveal = next(child for child in toggle["toggle"]["children"] if child["type"] == "toggle")
+        serialized = json.dumps(reveal, ensure_ascii=False)
+        self.assertIn("확인되지 않음", serialized)
+
 
 if __name__ == "__main__":
     unittest.main()

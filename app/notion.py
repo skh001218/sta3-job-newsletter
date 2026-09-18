@@ -137,6 +137,37 @@ def _list_text(values: list[str]) -> str:
     return "\n".join(f"• {value}" for value in values) if values else "-"
 
 
+def _heading(content: str, level: int) -> dict[str, Any]:
+    block_type = f"heading_{level}"
+    return {
+        "object": "block",
+        "type": block_type,
+        block_type: {"rich_text": [_text_object(content)]},
+    }
+
+
+def _bullets(values: list[str]) -> list[dict[str, Any]]:
+    items = values or ["-"]
+    return [
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {"rich_text": [_text_object(value)]},
+        }
+        for value in items
+    ]
+
+
+def _bold_transition(before: str, after: str) -> dict[str, Any]:
+    rich_text = [
+        {**_text_object(before or "확인되지 않음"), "annotations": {"bold": True}},
+        _text_object("에서 "),
+        {**_text_object(after or "확인되지 않음"), "annotations": {"bold": True}},
+        _text_object("으로 전환합니다."),
+    ]
+    return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
+
+
 def _safe_url(value: str) -> str | None:
     parsed = urlparse(value)
     return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
@@ -151,30 +182,90 @@ def build_attempt_toggle(attempt: dict[str, Any]) -> dict[str, Any]:
     timestamp = attempt.get("completed_at") or attempt.get("comparison_ready_at") or attempt["created_at"]
     title = f"풀이 기록 {timestamp[:10]} · attempt:{attempt['attempt_id']}"
 
-    children: list[dict[str, Any]] = []
-    children += _paragraphs("질문 버전", str(question["version"]))
-    children += _paragraphs("질문", f"{question['title']}\n{question.get('prompt', '')}")
-    children += _paragraphs("선택", f"{selected}. {options.get(selected, selected)}")
-    children += _paragraphs("선택 이유", response["reason"])
+    source = question.get("source", {})
+    source_url = _safe_url(source.get("url", ""))
+    evidence_links = comparison.get("evidence_links", [])
+    if not source_url and evidence_links:
+        source_url = _safe_url(evidence_links[0].get("url", ""))
+
+    recommended = comparison.get("recommended_option", "")
+    recommended_label = options.get(recommended, recommended) if recommended else "확인되지 않음"
+    recommended_text = (
+        f"{recommended}. {recommended_label}" if recommended else recommended_label
+    )
+    recommendation_reason = comparison.get("recommendation_reason") or "추천 판단의 근거를 확인할 수 없습니다."
+
+    reveal_children: list[dict[str, Any]] = [_heading("실제 사례", 3)]
+    reveal_children += _paragraphs("실제 조치", comparison.get("actual_action", "-"))
+    reveal_children += _paragraphs("실제 결과", comparison.get("actual_outcome", "-"))
+    reveal_children += _paragraphs("주요 지표", _list_text(comparison.get("metrics", [])))
+    reveal_children.append(_heading("추천 판단", 3))
+    reveal_children += _paragraphs("선택지", recommended_text)
+    reveal_children += _paragraphs("이유", recommendation_reason)
+    reveal_children.append(_heading("관점 전환", 3))
+    reveal_children.append(
+        _bold_transition(
+            comparison.get("perspective_before", ""),
+            comparison.get("perspective_after", ""),
+        )
+    )
+    reveal_children.append(_heading("내 답과 비교하기", 3))
+    reveal_children += _bullets(
+        [
+            "처음 판단에서 놓쳤던 정보는 무엇이었나요?",
+            "실제 결과를 본 뒤 답을 바꾸고 싶다면 무엇으로 바꾸고 싶나요?",
+        ]
+    )
+    reveal_children.append(_heading("다음에 가져갈 질문", 3))
+    reveal_children += _bullets(comparison.get("next_questions", []))
+    reveal_children.append(_heading("참조", 3))
+    reveal_children += _bullets(
+        [
+            f"자료명: {source.get('title', '-')}",
+            f"발행처: {source.get('publisher', '-')}",
+            f"발행일: {source.get('published_at', '확인되지 않음')}",
+            f"근거 수준: {source.get('evidence_level', '확인되지 않음')}",
+        ]
+    )
+    link_rich_text = [_text_object("원문 보기", source_url)] if source_url else [_text_object("원문 보기: 확인되지 않음")]
+    reveal_children.append(
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {"rich_text": link_rich_text},
+        }
+    )
+
+    scenario = question.get("scenario", "-")
+    prompt = question.get("prompt", "")
+    situation = f"{scenario}\n\n{prompt}" if prompt else scenario
+    children: list[dict[str, Any]] = [_heading("상황", 2)]
+    children += _paragraphs(question.get("title", "질문"), situation)
+    children.append(_heading("내 답변", 2))
+    children.append(_heading("선택한 이유", 3))
+    children += _paragraphs("선택한 답", f"{selected}. {options.get(selected, selected)}")
+    children += _paragraphs("이유", response["reason"])
+    children.append(_heading("실제 답과 내 답변의 차이와 고려해볼 점", 3))
     children += _paragraphs("예상 결과", response["expected_outcome"])
     children += _paragraphs("가정", response["assumptions"])
     children += _paragraphs("확신도", f"{response['confidence']}%")
-    children += _paragraphs("실제 조치", comparison.get("actual_action", "-"))
-    children += _paragraphs("실제 결과", comparison.get("actual_outcome", "-"))
-    children += _paragraphs("지표", _list_text(comparison.get("metrics", [])))
     children += _paragraphs("잘 고려한 점", _list_text(comparison.get("well_considered", [])))
-    children += _paragraphs("더 고려할 점", _list_text(comparison.get("missing_considerations", [])))
+    children += _paragraphs("놓친 점", _list_text(comparison.get("missing_considerations", [])))
     children += _paragraphs(
         "결과와 별개로 합리적인 판단", _list_text(comparison.get("reasonable_despite_outcome", []))
     )
     children += _paragraphs("확인할 수 없는 점", _list_text(comparison.get("unknown_from_evidence", [])))
-    children += _paragraphs("다음에 확인할 질문", _list_text(comparison.get("next_questions", [])))
-
-    source = question.get("source", {})
-    source_url = _safe_url(source.get("url", ""))
-    source_text = f"{source.get('title', '-')} · {source.get('publisher', '-')}"
-    source_rich_text = [_text_object(source_text, source_url)]
-    children.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": source_rich_text}})
+    children.append(
+        {
+            "object": "block",
+            "type": "toggle",
+            "toggle": {
+                "rich_text": [_text_object("실제 결과와 관점 전환 보기")],
+                "color": "green_background",
+                "children": reveal_children,
+            },
+        }
+    )
 
     return {
         "object": "block",

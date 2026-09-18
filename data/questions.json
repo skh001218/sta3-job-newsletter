@@ -16,6 +16,8 @@
       "source": {
         "title": "샘플 자료—실제 뉴스레터 문제로 교체해 주세요",
         "publisher": "샘플",
+        "published_at": "확인되지 않음",
+        "evidence_level": "기타 참고",
         "url": "https://example.com",
         "notion_page_id": ""
       },
@@ -23,6 +25,10 @@
         "actual_action": "이벤트 참여 시점과 진행 단계를 기준으로 코호트를 나누고, 4~6일차 특정 단계에서 이탈이 집중되는지 확인했습니다.",
         "actual_outcome": "보상 확장보다 진행 동선을 단축하는 A/B 테스트를 먼저 실행했고, 테스트 코호트의 7일차 재방문율이 회복되었습니다.",
         "metrics": ["7일차 재방문율 +3.1%p", "이벤트 완주율 +8.4%"],
+        "recommended_option": "B",
+        "recommendation_reason": "결과 지표에 바로 개입하기 전에 이탈이 발생한 코호트와 진행 단계를 분해해 원인을 확인하는 판단이 실제 사례와 가장 가깝습니다.",
+        "perspective_before": "재방문율이 떨어지면 보상이나 메시지를 즉시 강화해야 한다는 생각",
+        "perspective_after": "먼저 이탈이 발생한 대상과 구간을 특정한 뒤 원인에 맞는 실험을 설계하는 관점",
         "evidence_links": [
           {"label": "샘플 원문", "url": "https://example.com"}
         ]
