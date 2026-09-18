@@ -8,4 +8,5 @@ __pycache__/
 # 개인용 런타임 데이터
 data/*.db
 data/*.db-*
+data/slack_daily_state.json
 .pytest_cache/
