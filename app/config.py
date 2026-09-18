@@ -41,6 +41,10 @@ class Settings:
     notion_api_version: str
     sync_interval_seconds: int
     max_retries: int
+    newsletter_auto_enabled: bool = True
+    newsletter_run_at: str = "08:00"
+    newsletter_max_items: int = 3
+    newsletter_state_path: Path = ROOT / "data" / "newsletter_workflow_state.json"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -57,4 +61,11 @@ class Settings:
             notion_api_version=os.getenv("NOTION_API_VERSION", "2026-03-11").strip(),
             sync_interval_seconds=max(2, int(os.getenv("NOTION_SYNC_INTERVAL_SECONDS", "10"))),
             max_retries=max(1, int(os.getenv("NOTION_MAX_RETRIES", "6"))),
+            newsletter_auto_enabled=os.getenv("NEWSLETTER_AUTO_ENABLED", "true").lower()
+            in {"1", "true", "yes", "on"},
+            newsletter_run_at=os.getenv("NEWSLETTER_RUN_AT", "08:00").strip(),
+            newsletter_max_items=max(1, min(10, int(os.getenv("NEWSLETTER_MAX_ITEMS", "3")))),
+            newsletter_state_path=_path_setting(
+                "NEWSLETTER_STATE_PATH", "data/newsletter_workflow_state.json"
+            ),
         )

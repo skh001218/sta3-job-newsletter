@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from .contracts import API_CONTRACT_VERSION, PublicQuestion
+from .contracts import API_CONTRACT_VERSION, PublicQuestion, QuestionSummary
 
 
 class QuestionError(ValueError):
@@ -77,6 +77,29 @@ class QuestionRepository:
         if not active:
             raise QuestionError("활성 문제가 없습니다.")
         return copy.deepcopy(active[0])
+
+    def active(self) -> list[dict[str, Any]]:
+        return [
+            copy.deepcopy(question)
+            for question in self._load()
+            if question.get("active", True)
+        ]
+
+    def summaries(self) -> list[QuestionSummary]:
+        summaries: list[QuestionSummary] = []
+        for question in self.active():
+            source = question.get("source", {})
+            summaries.append(
+                {
+                    "id": question["id"],
+                    "version": question["version"],
+                    "title": question["title"],
+                    "publisher": source.get("publisher", "출처 미상"),
+                    "published_at": source.get("published_at", "확인되지 않음"),
+                    "evidence_level": source.get("evidence_level", "확인되지 않음"),
+                }
+            )
+        return summaries
 
     @classmethod
     def public_view(cls, question: dict[str, Any]) -> PublicQuestion:

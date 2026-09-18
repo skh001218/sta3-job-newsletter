@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "title": {"type": "string"},
+          "scenario": {"type": "string"},
+          "prompt": {"type": "string"},
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {"type": "string"},
+                "label": {"type": "string"}
+              },
+              "required": ["id", "label"]
+            }
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "title": {"type": "string"},
+              "publisher": {"type": "string"},
+              "published_at": {"type": "string"},
+              "evidence_level": {"type": "string"},
+              "related_topics": {"type": "array", "items": {"type": "string"}},
+              "url": {"type": "string"},
+              "notion_page_id": {"type": "string"}
+            },
+            "required": ["title", "publisher", "published_at", "evidence_level", "related_topics", "url", "notion_page_id"]
+          },
+          "actual_action": {"type": "string"},
+          "actual_outcome": {"type": "string"},
+          "metrics": {"type": "array", "items": {"type": "string"}},
+          "recommended_option": {"type": "string"},
+          "recommendation_reason": {"type": "string"},
+          "perspective_before": {"type": "string"},
+          "perspective_after": {"type": "string"},
+          "evidence_links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "label": {"type": "string"},
+                "url": {"type": "string"}
+              },
+              "required": ["label", "url"]
+            }
+          },
+          "evaluation_by_option": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "option_id": {"type": "string"},
+                "well_considered": {"type": "array", "items": {"type": "string"}},
+                "missing_considerations": {"type": "array", "items": {"type": "string"}},
+                "reasonable_despite_outcome": {"type": "array", "items": {"type": "string"}}
+              },
+              "required": ["option_id", "well_considered", "missing_considerations", "reasonable_despite_outcome"]
+            }
+          },
+          "unknown_from_evidence": {"type": "array", "items": {"type": "string"}},
+          "next_questions": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["id", "title", "scenario", "prompt", "options", "source", "actual_action", "actual_outcome", "metrics", "recommended_option", "recommendation_reason", "perspective_before", "perspective_after", "evidence_links", "evaluation_by_option", "unknown_from_evidence", "next_questions"]
+      }
+    }
+  },
+  "required": ["questions"]
+}

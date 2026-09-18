@@ -8,7 +8,13 @@ from pathlib import Path
 from app.config import Settings
 from app.contracts import API_CONTRACT_VERSION
 from app.db import Database
-from app.notion import NotionSyncService, build_attempt_toggle
+from app.notion import (
+    NotionClient,
+    NotionError,
+    NotionSyncService,
+    build_attempt_database_properties,
+    build_attempt_toggle,
+)
 from app.questions import QuestionRepository
 from app.service import AttemptService, ServiceError
 
@@ -147,6 +153,71 @@ class AttemptServiceTest(unittest.TestCase):
         reveal = next(child for child in toggle["toggle"]["children"] if child["type"] == "toggle")
         serialized = json.dumps(reveal, ensure_ascii=False)
         self.assertIn("확인되지 않음", serialized)
+
+    def test_notion_database_properties_match_newsletter_schema(self) -> None:
+        attempt = self.service.submit(self.payload())
+        attempt["question"]["source"].update(
+            {
+                "published_at": "2026-09-18",
+                "evidence_level": "공식",
+                "related_topics": ["행동 분석", "지표"],
+            }
+        )
+        schema = {
+            "자료명": {"type": "title"},
+            "발행처": {"type": "rich_text"},
+            "발행일": {"type": "date"},
+            "원문": {"type": "url"},
+            "읽음": {"type": "checkbox"},
+            "근거 수준": {"type": "select"},
+            "관련 주제": {"type": "multi_select"},
+        }
+
+        properties = build_attempt_database_properties(attempt, schema, "읽음")
+
+        title = properties["자료명"]["title"][0]["text"]["content"]
+        self.assertEqual(attempt["question"]["title"], title)
+        self.assertNotIn(attempt["attempt_id"], title)
+        self.assertNotIn(attempt["created_at"][:10], title)
+        self.assertEqual("샘플", properties["발행처"]["rich_text"][0]["text"]["content"])
+        self.assertEqual("2026-09-18", properties["발행일"]["date"]["start"])
+        self.assertEqual("https://example.com", properties["원문"]["url"])
+        self.assertTrue(properties["읽음"]["checkbox"])
+        self.assertEqual("공식", properties["근거 수준"]["select"]["name"])
+        self.assertEqual(
+            [{"name": "행동 분석"}, {"name": "지표"}], properties["관련 주제"]["multi_select"]
+        )
+
+    def test_notion_resolves_inline_database_from_page(self) -> None:
+        client = NotionClient("token", "2026-03-11")
+        responses = {
+            ("GET", "/blocks/page-id/children?page_size=100"): {
+                "results": [
+                    {"id": "database-id", "type": "child_database", "child_database": {}}
+                ],
+                "has_more": False,
+            },
+            ("GET", "/databases/database-id"): {
+                "object": "database",
+                "id": "database-id",
+                "data_sources": [{"id": "source-id"}],
+            },
+            ("GET", "/data_sources/source-id"): {
+                "object": "data_source",
+                "id": "source-id",
+                "properties": {"자료명": {"type": "title"}},
+            },
+        }
+
+        def fake_request(method: str, path: str, payload=None):
+            if path == "/databases/page-id":
+                raise NotionError("page, not database", 400)
+            return responses[(method, path)]
+
+        client.request = fake_request
+        target = client.resolve_data_source("page-id")
+        self.assertEqual("database-id", target["database_id"])
+        self.assertEqual("source-id", target["data_source_id"])
 
 
 if __name__ == "__main__":

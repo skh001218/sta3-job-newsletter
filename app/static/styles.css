@@ -27,6 +27,19 @@ body {
 .intro { max-width: 660px; color: var(--muted); font-size: 1.05rem; }
 .card { margin: 22px 0; padding: clamp(24px, 5vw, 54px); border: 1px solid var(--line); border-radius: 4px; background: rgba(255, 253, 248, .94); box-shadow: var(--shadow); }
 .loading { color: var(--muted); }
+.library-card { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, .6fr); gap: 28px; align-items: end; padding-top: 28px; padding-bottom: 28px; }
+.library-card .eyebrow { margin: 0 0 8px; }
+.library-label { display: block; margin-bottom: 8px; font-size: 1rem; font-weight: 800; }
+.library-card select { width: 100%; padding: 13px 42px 13px 14px; border: 1px solid var(--line); border-radius: 3px; background: #fff; color: var(--ink); font: inherit; }
+.library-card select:focus { outline: 2px solid rgba(214, 81, 50, .25); border-color: var(--accent); }
+.workflow-panel { display: grid; gap: 10px; justify-items: stretch; }
+.workflow-status { min-height: 2.8em; margin: 0; color: var(--muted); font-size: .84rem; }
+.progress-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.progress-row progress { width: 100%; height: 10px; overflow: hidden; border: 0; border-radius: 999px; background: #e5e0d5; accent-color: var(--accent); }
+.progress-row progress::-webkit-progress-bar { border-radius: 999px; background: #e5e0d5; }
+.progress-row progress::-webkit-progress-value { border-radius: 999px; background: var(--accent); transition: width .35s ease; }
+.progress-row progress::-moz-progress-bar { border-radius: 999px; background: var(--accent); }
+.progress-row output { min-width: 3.2em; color: var(--green); font-size: .78rem; font-weight: 800; text-align: right; }
 .step { display: flex; gap: 11px; align-items: center; margin-bottom: 32px; }
 .step span { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: .65rem; }
 h2 { margin: 8px 0 16px; font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(1.8rem, 4vw, 2.7rem); font-weight: 500; letter-spacing: -.035em; line-height: 1.25; }
@@ -78,7 +91,7 @@ dialog::backdrop { background: rgba(24, 32, 30, .58); backdrop-filter: blur(3px)
 
 @media (max-width: 680px) {
   .shell { padding-top: 42px; }
-  .grid, .detail-grid { grid-template-columns: 1fr; }
+  .grid, .detail-grid, .library-card { grid-template-columns: 1fr; }
   .detail.wide { grid-column: auto; }
   .primary, .secondary, .link-button { width: 100%; text-align: center; }
 }

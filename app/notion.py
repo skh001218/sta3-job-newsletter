@@ -67,46 +67,99 @@ class NotionClient:
         data = block.get(block.get("type", ""), {})
         return "".join(item.get("plain_text", "") for item in data.get("rich_text", []))
 
-    def find_attempt_block(self, page_id: str, attempt_id: str) -> str | None:
-        marker = f"attempt:{attempt_id}"
+    def _block_children(self, block_id: str) -> list[dict[str, Any]]:
+        children: list[dict[str, Any]] = []
         cursor: str | None = None
         while True:
             suffix = "?page_size=100"
             if cursor:
                 suffix += f"&start_cursor={cursor}"
-            result = self.request("GET", f"/blocks/{page_id}/children{suffix}")
-            for block in result.get("results", []):
-                if marker in self._rich_text(block):
-                    return block.get("id")
+            result = self.request("GET", f"/blocks/{block_id}/children{suffix}")
+            children.extend(result.get("results", []))
             if not result.get("has_more"):
-                return None
+                return children
             cursor = result.get("next_cursor")
 
-    def append_attempt(self, page_id: str, attempt: dict[str, Any]) -> str:
-        children = [build_attempt_toggle(attempt)]
+    def resolve_data_source(self, container_id: str) -> dict[str, Any]:
+        database: dict[str, Any] | None = None
+        try:
+            candidate = self.request("GET", f"/databases/{container_id}")
+            if candidate.get("object") == "database":
+                database = candidate
+        except NotionError as exc:
+            if exc.status not in {400, 404}:
+                raise
+
+        if database is None:
+            child_databases = [
+                block
+                for block in self._block_children(container_id)
+                if block.get("type") == "child_database"
+            ]
+            if len(child_databases) != 1:
+                raise NotionError(
+                    "저장 대상 페이지에는 인라인 데이터베이스가 정확히 하나 있어야 합니다.",
+                    400,
+                )
+            database = self.request("GET", f"/databases/{child_databases[0]['id']}")
+
+        data_sources = database.get("data_sources", [])
+        if len(data_sources) != 1 or not data_sources[0].get("id"):
+            raise NotionError("저장 대상 데이터베이스의 데이터 소스를 하나로 확인할 수 없습니다.", 400)
+        data_source = self.request("GET", f"/data_sources/{data_sources[0]['id']}")
+        return {
+            "database_id": database["id"],
+            "data_source_id": data_source["id"],
+            "properties": data_source.get("properties", {}),
+        }
+
+    @staticmethod
+    def _title_property(properties: dict[str, Any]) -> str:
+        titles = [name for name, value in properties.items() if value.get("type") == "title"]
+        if len(titles) != 1:
+            raise NotionError("저장 대상 데이터베이스의 제목 속성을 하나로 확인할 수 없습니다.", 400)
+        return titles[0]
+
+    def create_attempt_page(
+        self,
+        data_source_id: str,
+        properties: dict[str, Any],
+        attempt: dict[str, Any],
+        read_property: str,
+    ) -> dict[str, Any]:
+        toggle = build_attempt_toggle(attempt)
         result = self.request(
-            "PATCH",
-            f"/blocks/{page_id}/children",
-            {"children": children, "position": {"type": "end"}},
+            "POST",
+            "/pages",
+            {
+                "parent": {"type": "data_source_id", "data_source_id": data_source_id},
+                "properties": build_attempt_database_properties(
+                    attempt, properties, read_property
+                ),
+                "children": toggle["toggle"]["children"],
+            },
         )
-        created = result.get("results", [])
-        if not created or not created[0].get("id"):
-            raise NotionError("Notion이 추가된 블록 ID를 반환하지 않았습니다.")
-        return created[0]["id"]
+        if not result.get("id"):
+            raise NotionError("Notion이 생성된 데이터베이스 행 ID를 반환하지 않았습니다.")
+        return result
 
-    def verify_block(self, block_id: str, attempt_id: str) -> None:
-        block = self.request("GET", f"/blocks/{block_id}")
-        if f"attempt:{attempt_id}" not in self._rich_text(block):
-            raise NotionError("Notion 블록은 추가되었지만 시도 ID를 검증하지 못했습니다.")
-
-    def mark_read(self, page_id: str, property_name: str) -> None:
-        if not property_name:
-            return
-        self.request(
-            "PATCH",
-            f"/pages/{page_id}",
-            {"properties": {property_name: {"checkbox": True}}},
+    def verify_attempt_page(
+        self,
+        page_id: str,
+        data_source_id: str,
+        properties: dict[str, Any],
+        expected_title: str,
+    ) -> dict[str, Any]:
+        page = self.request("GET", f"/pages/{page_id}")
+        title_property = self._title_property(properties)
+        title = "".join(
+            item.get("plain_text", "")
+            for item in page.get("properties", {}).get(title_property, {}).get("title", [])
         )
+        parent = page.get("parent", {})
+        if title != expected_title or parent.get("data_source_id") != data_source_id:
+            raise NotionError("생성된 Notion 데이터베이스 행을 검증하지 못했습니다.")
+        return page
 
 
 def _text_object(content: str, url: str | None = None) -> dict[str, Any]:
@@ -171,6 +224,51 @@ def _bold_transition(before: str, after: str) -> dict[str, Any]:
 def _safe_url(value: str) -> str | None:
     parsed = urlparse(value)
     return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
+
+
+def build_attempt_database_properties(
+    attempt: dict[str, Any], schema: dict[str, Any], read_property: str
+) -> dict[str, Any]:
+    question = attempt["question"]
+    source = question.get("source", {})
+    title_properties = [name for name, value in schema.items() if value.get("type") == "title"]
+    if len(title_properties) != 1:
+        raise NotionError("저장 대상 데이터베이스의 제목 속성을 하나로 확인할 수 없습니다.", 400)
+
+    title = question.get("title", "풀이 기록")
+    properties: dict[str, Any] = {
+        title_properties[0]: {"title": [_text_object(title)]},
+    }
+
+    if schema.get("발행처", {}).get("type") == "rich_text" and source.get("publisher"):
+        properties["발행처"] = {"rich_text": [_text_object(source["publisher"])]}
+    source_url = _safe_url(source.get("url", ""))
+    if schema.get("원문", {}).get("type") == "url" and source_url:
+        properties["원문"] = {"url": source_url}
+    published_at = source.get("published_at", "")
+    try:
+        datetime.fromisoformat(published_at)
+    except (TypeError, ValueError):
+        pass
+    else:
+        if schema.get("발행일", {}).get("type") == "date":
+            properties["발행일"] = {"date": {"start": published_at}}
+    evidence_level = source.get("evidence_level", "")
+    if schema.get("근거 수준", {}).get("type") == "select" and evidence_level:
+        properties["근거 수준"] = {"select": {"name": evidence_level}}
+    topics = source.get("related_topics", [])
+    if schema.get("관련 주제", {}).get("type") == "multi_select" and topics:
+        properties["관련 주제"] = {
+            "multi_select": [{"name": topic} for topic in topics if isinstance(topic, str) and topic]
+        }
+    if read_property:
+        if schema.get(read_property, {}).get("type") != "checkbox":
+            raise NotionError(
+                f"Notion 데이터베이스에 checkbox 속성 '{read_property}'이(가) 없습니다.",
+                400,
+            )
+        properties[read_property] = {"checkbox": True}
+    return properties
 
 
 def build_attempt_toggle(attempt: dict[str, Any]) -> dict[str, Any]:
@@ -368,6 +466,9 @@ class NotionSyncService:
                 "UPDATE attempts SET notion_status = ? WHERE id = ?",
                 (PersistenceStatus.SYNCING.value, attempt_id),
             )
+            stored_attempt = connection.execute(
+                "SELECT notion_page_id, notion_url FROM attempts WHERE id = ?", (attempt_id,)
+            ).fetchone()
             connection.commit()
 
         attempt = self.attempts.get(attempt_id)
@@ -376,12 +477,44 @@ class NotionSyncService:
             if not page_id:
                 raise NotionError("NOTION_PAGE_ID 또는 문제의 source.notion_page_id가 필요합니다.", 400)
             client = NotionClient(self.settings.notion_token, self.settings.notion_api_version)
-            block_id = client.find_attempt_block(page_id, attempt_id)
-            if not block_id:
-                block_id = client.append_attempt(page_id, attempt)
-            client.verify_block(block_id, attempt_id)
-            client.mark_read(page_id, self.settings.notion_read_property)
-            notion_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+            target = client.resolve_data_source(page_id)
+            notion_page: dict[str, Any] | None = None
+            if stored_attempt and stored_attempt["notion_page_id"]:
+                try:
+                    notion_page = client.request(
+                        "GET", f"/pages/{stored_attempt['notion_page_id']}"
+                    )
+                except NotionError as exc:
+                    if exc.status != 404:
+                        raise
+            if notion_page is None:
+                notion_page = client.create_attempt_page(
+                    target["data_source_id"],
+                    target["properties"],
+                    attempt,
+                    self.settings.notion_read_property,
+                )
+                created_page_id = notion_page["id"]
+                created_url = notion_page.get("url") or (
+                    f"https://www.notion.so/{created_page_id.replace('-', '')}"
+                )
+                with self.db.connect() as connection:
+                    connection.execute(
+                        """
+                        UPDATE attempts
+                        SET notion_page_id = ?, notion_block_id = ?, notion_url = ?
+                        WHERE id = ?
+                        """,
+                        (created_page_id, created_page_id, created_url, attempt_id),
+                    )
+            notion_page = client.verify_attempt_page(
+                notion_page["id"],
+                target["data_source_id"],
+                target["properties"],
+                attempt["question"].get("title", "풀이 기록"),
+            )
+            notion_page_id = notion_page["id"]
+            notion_url = notion_page.get("url") or f"https://www.notion.so/{notion_page_id.replace('-', '')}"
             now = utc_now()
             with self.db.connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -400,7 +533,13 @@ class NotionSyncService:
                         notion_url = ?, last_error = NULL
                     WHERE id = ?
                     """,
-                    (PersistenceStatus.SAVED.value, page_id, block_id, notion_url, attempt_id),
+                    (
+                        PersistenceStatus.SAVED.value,
+                        notion_page_id,
+                        notion_page_id,
+                        notion_url,
+                        attempt_id,
+                    ),
                 )
                 connection.commit()
             return True

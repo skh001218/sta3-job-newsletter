@@ -17,6 +17,22 @@
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
+    <section id="question-library" class="card library-card">
+      <div>
+        <p class="eyebrow">QUESTION LIBRARY</p>
+        <label for="question-select" class="library-label">풀 문제 선택</label>
+        <select id="question-select" aria-label="풀 문제 선택"></select>
+      </div>
+      <div class="workflow-panel">
+        <p id="workflow-status" class="workflow-status">뉴스레터 상태를 확인하는 중…</p>
+        <div class="progress-row">
+          <progress id="workflow-progress" max="100" value="0" aria-label="새 문제 가져오기 진행률"></progress>
+          <output id="workflow-progress-output" for="workflow-progress">0%</output>
+        </div>
+        <button id="workflow-run-button" class="secondary" type="button">새 문제 지금 가져오기</button>
+      </div>
+    </section>
+
     <section id="loading" class="card loading">문제를 불러오는 중…</section>
 
     <section id="answer-view" class="card" hidden>

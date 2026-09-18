@@ -16,8 +16,7 @@
 Python 3.11 이상이면 외부 패키지 설치 없이 실행할 수 있습니다.
 
 ```powershell
-Copy-Item .env.example .env
-# .env의 NOTION_TOKEN과 NOTION_PAGE_ID를 입력합니다.
+# .env에 NOTION_TOKEN, NOTION_PAGE_ID와 Slack 설정을 입력합니다.
 python -m app
 ```
 
@@ -27,15 +26,30 @@ python -m app
 
 ## Notion 연결
 
-1. Notion integration을 만들고 대상 자료 페이지에 연결합니다.
-2. `.env`에 `NOTION_TOKEN`과 페이지 ID인 `NOTION_PAGE_ID`를 설정합니다.
-3. 기존 DB의 체크박스 속성명이 `읽음`과 다르면 `NOTION_READ_PROPERTY`를 변경합니다.
+1. Notion integration을 만들고 대상 자료 페이지와 그 안의 인라인 데이터베이스에 연결합니다.
+2. `.env`에 `NOTION_TOKEN`과 데이터베이스를 포함한 페이지 ID인 `NOTION_PAGE_ID`를 설정합니다.
+3. 대상 페이지에는 인라인 데이터베이스가 하나 있어야 하며, 저장할 때 새 행의 본문에 풀이 상세 내용이 기록됩니다.
+4. 데이터베이스의 체크박스 속성명이 `읽음`과 다르면 `NOTION_READ_PROPERTY`를 변경합니다.
 
 문제별 다른 Notion 페이지를 쓰려면 `data/questions.json`의 `source.notion_page_id` 값을 지정하세요. 빈 값인 경우 `NOTION_PAGE_ID`를 사용합니다.
 
 ## 문제 추가
 
 `data/questions.json`에 문제를 추가합니다. `reveal`과 `evaluation`은 서버에서만 읽고 문제 조회 API에서는 제외됩니다. Notion 풀이 기록의 추천 판단과 관점 전환에는 `reveal.recommended_option`, `recommendation_reason`, `perspective_before`, `perspective_after`를 사용하고, 참조에는 `source.published_at`, `evidence_level`을 사용합니다. 이미 풀이한 문제를 수정할 때는 기존 버전을 바꾸지 말고 `version`을 증가시키세요. 각 시도에는 제출 당시 문제·결과·출처 스냅샷이 남습니다.
+
+웹 상단의 문제 선택 목록은 활성 문제를 모두 보여줍니다. 문제를 바꾸면 각 문제의 임시 답변은 문제 ID와 버전별로 따로 보관됩니다.
+
+## 뉴스레터 자동 워크플로
+
+서버는 기본적으로 매일 `08:00` 이후 한 번 다음 흐름을 백그라운드에서 실행합니다.
+
+1. Codex CLI가 `game-da-newsletter-research` 스킬로 최신 자료를 조사합니다.
+2. 기존 Notion 자료를 조사 참고로 읽고, `data/questions.json`에 이미 등록된 원문 URL을 제외합니다.
+3. Notion에만 있고 아직 문제가 없는 자료를 포함해 근거 기반 상황형 문제를 생성합니다.
+4. 생성 결과를 검증한 뒤 `data/questions.json`에 원자적으로 병합합니다.
+5. 성공하면 Slack으로 당일 문제 풀이 링크를 한 번 전송합니다.
+
+웹의 `새 문제 지금 가져오기` 버튼으로 즉시 실행할 수도 있습니다. 조사, 문제 생성, 검증, 등록과 알림 단계를 진행률 막대와 퍼센트로 확인할 수 있습니다. 자동 실행에는 로그인된 Codex CLI와 연결된 Notion 도구가 필요하며, Slack 알림에는 `.env`의 `SLACK_BOT_TOKEN`, `SLACK_USER_ID`가 필요합니다. 실패 상태는 웹 상단에 표시되고 다음 예약 실행에서 다시 시도합니다.
 
 ## 공통 계약
 
@@ -68,5 +82,9 @@ python -m unittest discover -s tests -v
 | `NOTION_PAGE_ID` | 빈 값 | 기본 저장 대상 자료 페이지 ID |
 | `NOTION_READ_PROPERTY` | `읽음` | 저장 검증 후 선택할 checkbox 속성 |
 | `NOTION_API_VERSION` | `2026-03-11` | 고정할 Notion API 버전 |
+| `NEWSLETTER_AUTO_ENABLED` | `true` | 매일 뉴스레터 조사·문제 생성 실행 여부 |
+| `NEWSLETTER_RUN_AT` | `08:00` | 현지 시각 기준 일일 실행 시각 |
+| `NEWSLETTER_MAX_ITEMS` | `3` | 한 번에 조사·생성할 최대 자료 수(1~10) |
+| `NEWSLETTER_STATE_PATH` | `data/newsletter_workflow_state.json` | 마지막 실행 상태 파일 |
 
 `APP_HOST=0.0.0.0`으로 공개할 때는 반드시 `APP_ACCESS_TOKEN`을 설정하고 HTTPS 역방향 프록시 뒤에서 실행하세요.

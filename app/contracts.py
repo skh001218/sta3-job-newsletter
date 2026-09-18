@@ -34,6 +34,7 @@ class QuestionSource(TypedDict, total=False):
     publisher: str
     published_at: str
     evidence_level: str
+    related_topics: list[str]
     url: str
     notion_page_id: str
 
@@ -49,6 +50,15 @@ class PublicQuestion(TypedDict):
     options: list[QuestionOption]
     answer_fields: NotRequired[list[str]]
     source: NotRequired[QuestionSource]
+
+
+class QuestionSummary(TypedDict):
+    id: str
+    version: int
+    title: str
+    publisher: str
+    published_at: str
+    evidence_level: str
 
 
 class AttemptAnswer(TypedDict):
@@ -101,6 +111,8 @@ class AttemptApplication(Protocol):
     """웹 계층이 사용하는 문제 풀이 애플리케이션 경계."""
 
     def get_public_question(self, question_id: str | None = None) -> PublicQuestion: ...
+
+    def list_questions(self) -> list[QuestionSummary]: ...
 
     def submit(self, payload: dict[str, Any]) -> AttemptView: ...
 
