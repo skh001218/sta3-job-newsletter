@@ -14,6 +14,7 @@ from .contracts import (
     AttemptView,
     ComparisonResult,
     PublicQuestion,
+    QuestionSummary,
 )
 from .db import Database
 from .questions import QuestionError, QuestionRepository
@@ -52,6 +53,12 @@ class AttemptService:
         except QuestionError as exc:
             raise ServiceError(str(exc), 404) from exc
         return self.questions.public_view(question)
+
+    def list_questions(self) -> list[QuestionSummary]:
+        try:
+            return self.questions.summaries()
+        except QuestionError as exc:
+            raise ServiceError(str(exc), 404) from exc
 
     def submit(self, payload: dict[str, Any]) -> AttemptView:
         idempotency_key = self._required_text(payload, "idempotency_key", 200)

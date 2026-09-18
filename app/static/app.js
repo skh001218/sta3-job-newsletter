@@ -4,6 +4,9 @@ const state = {
   question: null,
   attempt: null,
   pollTimer: null,
+  workflowPollTimer: null,
+  workflowWasRunning: false,
+  questions: [],
   submitConfirmed: false,
 };
 
@@ -88,6 +91,7 @@ function restoreDraft(question) {
 
 function renderQuestion(question) {
   state.question = question;
+  el("question-select").value = question.id;
   el("loading").hidden = true;
   el("result-view").hidden = true;
   el("answer-view").hidden = false;
@@ -111,6 +115,108 @@ function renderQuestion(question) {
     options.append(label);
   }
   restoreDraft(question);
+}
+
+async function loadQuestions() {
+  const payload = await api("/api/questions");
+  state.questions = payload.questions || [];
+  const select = el("question-select");
+  select.replaceChildren();
+  for (const question of state.questions) {
+    const option = document.createElement("option");
+    option.value = question.id;
+    const date = question.published_at === "확인되지 않음" ? "날짜 미상" : question.published_at;
+    option.textContent = `${question.title} · ${question.publisher} · ${date}`;
+    select.append(option);
+  }
+  select.disabled = state.questions.length < 2;
+}
+
+async function switchQuestion(event) {
+  const questionId = event.target.value;
+  if (!questionId || questionId === state.question?.id) return;
+  const hasDraft = state.question && localStorage.getItem(draftKey(state.question));
+  if ((state.attempt || hasDraft) && !window.confirm("현재 풀이를 벗어나 다른 문제를 선택할까요?")) {
+    event.target.value = state.question.id;
+    return;
+  }
+  clearTimeout(state.pollTimer);
+  localStorage.removeItem("current-attempt-id");
+  state.attempt = null;
+  el("answer-form").reset();
+  el("confidence-output").textContent = "50%";
+  clearNotice();
+  el("loading").hidden = false;
+  try {
+    renderQuestion(await api(`/api/questions/${encodeURIComponent(questionId)}`));
+    window.scrollTo({ top: el("question-library").offsetTop, behavior: "smooth" });
+  } catch (error) {
+    notice(error.message);
+    event.target.value = state.question?.id || "";
+  }
+}
+
+function renderWorkflowStatus(status) {
+  const button = el("workflow-run-button");
+  const progress = el("workflow-progress");
+  const progressValue = Math.max(0, Math.min(100, Number(status.progress_percent) || 0));
+  progress.value = progressValue;
+  progress.setAttribute("aria-valuetext", status.progress_message || `${progressValue}%`);
+  el("workflow-progress-output").textContent = `${progressValue}%`;
+  button.disabled = Boolean(status.running);
+  if (status.running || status.last_status === "RUNNING") {
+    state.workflowWasRunning = true;
+    el("workflow-status").textContent = status.progress_message || "최신 자료를 조사하고 문제를 만드는 중입니다.";
+    clearTimeout(state.workflowPollTimer);
+    state.workflowPollTimer = setTimeout(refreshWorkflowStatus, 5000);
+    return;
+  }
+  if (["FAILED", "INTERRUPTED"].includes(status.last_status)) {
+    el("workflow-status").textContent = `최근 실행 실패: ${status.last_error || "원인을 확인해 주세요."}`;
+    return;
+  }
+  if (status.last_status === "SUCCEEDED") {
+    el("workflow-status").textContent = `최근 갱신 ${status.last_finished_at || ""} · 신규 ${status.added_count}개`;
+    return;
+  }
+  el("workflow-status").textContent = status.enabled
+    ? `매일 ${status.run_at}에 최신 자료를 확인합니다.`
+    : "자동 뉴스레터 갱신이 꺼져 있습니다.";
+}
+
+async function refreshWorkflowStatus() {
+  try {
+    const wasRunning = state.workflowWasRunning;
+    const status = await api("/api/newsletter/status");
+    renderWorkflowStatus(status);
+    if (status.last_status === "SUCCEEDED") {
+      await loadQuestions();
+      if (wasRunning && status.added_count > 0) {
+        notice(`새 문제 ${status.added_count}개가 추가되었습니다.`, true);
+      }
+      state.workflowWasRunning = false;
+    }
+  } catch (error) {
+    el("workflow-status").textContent = error.message;
+  }
+}
+
+async function runNewsletterWorkflow() {
+  if (!window.confirm("최신 자료 조사와 문제 생성을 지금 시작할까요? 완료까지 시간이 걸릴 수 있습니다.")) return;
+  const button = el("workflow-run-button");
+  button.disabled = true;
+  clearNotice();
+  try {
+    const status = await api("/api/newsletter/run", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    renderWorkflowStatus(status);
+    notice("뉴스레터 조사와 문제 생성을 시작했습니다.", true);
+  } catch (error) {
+    notice(error.message);
+    button.disabled = false;
+  }
 }
 
 function detail(label, value, wide = false) {
@@ -364,6 +470,8 @@ function newAttempt() {
 }
 
 async function initialize() {
+  el("question-select").addEventListener("change", switchQuestion);
+  el("workflow-run-button").addEventListener("click", runNewsletterWorkflow);
   el("answer-form").addEventListener("submit", submitAnswer);
   el("answer-form").addEventListener("input", saveDraft);
   el("answer-form").elements.confidence.addEventListener("input", (event) => {
@@ -378,6 +486,14 @@ async function initialize() {
     state.submitConfirmed = true;
     el("answer-form").requestSubmit();
   });
+
+  try {
+    await Promise.all([loadQuestions(), refreshWorkflowStatus()]);
+  } catch (error) {
+    el("loading").textContent = error.message;
+    notice(error.message);
+    return;
+  }
 
   const attemptId = localStorage.getItem("current-attempt-id");
   if (attemptId) {

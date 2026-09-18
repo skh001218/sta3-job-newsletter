@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlparse
 from .config import Settings
 from .contracts import PersistenceStatus
 from .db import Database
+from .newsletter import NewsletterWorkflow, NewsletterWorkflowScheduler
 from .notion import NotionSyncService, NotionSyncWorker
 from .questions import QuestionRepository
 from .service import AttemptService, ServiceError
@@ -36,6 +37,7 @@ class AppServer(ThreadingHTTPServer):
         questions = QuestionRepository(settings.question_data_path)
         self.attempts = AttemptService(self.db, questions)
         self.notion = NotionSyncService(self.db, self.attempts, settings)
+        self.newsletter = NewsletterWorkflow(settings)
         super().__init__(address, RequestHandler)
 
 
@@ -55,8 +57,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             try:
                 if path == "/api/health":
                     return self._json({"ok": True})
+                if path == "/api/questions":
+                    return self._json({"questions": self.server.attempts.list_questions()})
                 if path == "/api/questions/current":
                     return self._json(self.server.attempts.get_public_question())
+                if path == "/api/newsletter/status":
+                    return self._json(self.server.newsletter.status())
                 match = QUESTION_ROUTE.match(path)
                 if match:
                     return self._json(self.server.attempts.get_public_question(unquote(match.group(1))))
@@ -80,6 +86,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if path == "/api/attempts":
                 return self._json(self.server.attempts.submit(payload), HTTPStatus.CREATED)
+            if path == "/api/newsletter/run":
+                started = self.server.newsletter.run_async()
+                status = HTTPStatus.ACCEPTED if started else HTTPStatus.CONFLICT
+                result = self.server.newsletter.status()
+                result["started"] = started
+                return self._json(result, status)
             match = COMPARISON_RETRY_ROUTE.match(path)
             if match:
                 return self._json(self.server.attempts.retry_comparison(match.group(1)))
@@ -182,13 +194,16 @@ def run() -> None:
         raise SystemExit("APP_HOST를 외부에 공개할 때는 APP_ACCESS_TOKEN을 설정해야 합니다.")
     server = AppServer((settings.host, settings.port), settings)
     worker = NotionSyncWorker(server.notion, settings.sync_interval_seconds)
+    newsletter_scheduler = NewsletterWorkflowScheduler(server.newsletter)
     worker.start()
+    newsletter_scheduler.start()
     print(f"게임 DA 문제 풀이: http://{settings.host}:{settings.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        newsletter_scheduler.stop()
         worker.stop()
         server.shutdown()
         server.server_close()
