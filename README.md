@@ -35,7 +35,7 @@ python -m app
 
 ## 문제 추가
 
-`data/questions.json`에 문제를 추가합니다. `reveal`과 `evaluation`은 서버에서만 읽고 문제 조회 API에서는 제외됩니다. 이미 풀이한 문제를 수정할 때는 기존 버전을 바꾸지 말고 `version`을 증가시키세요. 각 시도에는 제출 당시 문제·결과·출처 스냅샷이 남습니다.
+`data/questions.json`에 문제를 추가합니다. `reveal`과 `evaluation`은 서버에서만 읽고 문제 조회 API에서는 제외됩니다. Notion 풀이 기록의 추천 판단과 관점 전환에는 `reveal.recommended_option`, `recommendation_reason`, `perspective_before`, `perspective_after`를 사용하고, 참조에는 `source.published_at`, `evidence_level`을 사용합니다. 이미 풀이한 문제를 수정할 때는 기존 버전을 바꾸지 말고 `version`을 증가시키세요. 각 시도에는 제출 당시 문제·결과·출처 스냅샷이 남습니다.
 
 ## 공통 계약
 

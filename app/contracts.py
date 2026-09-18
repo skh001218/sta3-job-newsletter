@@ -32,6 +32,8 @@ class QuestionOption(TypedDict):
 class QuestionSource(TypedDict, total=False):
     title: str
     publisher: str
+    published_at: str
+    evidence_level: str
     url: str
     notion_page_id: str
 
@@ -66,6 +68,10 @@ class ComparisonResult(TypedDict):
     actual_action: str
     actual_outcome: str
     metrics: list[str]
+    recommended_option: str
+    recommendation_reason: str
+    perspective_before: str
+    perspective_after: str
     well_considered: list[str]
     missing_considerations: list[str]
     reasonable_despite_outcome: list[str]
