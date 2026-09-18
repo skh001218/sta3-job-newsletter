@@ -156,6 +156,8 @@ class AttemptServiceTest(unittest.TestCase):
 
     def test_notion_database_properties_match_newsletter_schema(self) -> None:
         attempt = self.service.submit(self.payload())
+        expected_publisher = attempt["question"]["source"]["publisher"]
+        expected_url = attempt["question"]["source"]["url"]
         attempt["question"]["source"].update(
             {
                 "published_at": "2026-09-18",
@@ -179,9 +181,9 @@ class AttemptServiceTest(unittest.TestCase):
         self.assertEqual(attempt["question"]["title"], title)
         self.assertNotIn(attempt["attempt_id"], title)
         self.assertNotIn(attempt["created_at"][:10], title)
-        self.assertEqual("샘플", properties["발행처"]["rich_text"][0]["text"]["content"])
+        self.assertEqual(expected_publisher, properties["발행처"]["rich_text"][0]["text"]["content"])
         self.assertEqual("2026-09-18", properties["발행일"]["date"]["start"])
-        self.assertEqual("https://example.com", properties["원문"]["url"])
+        self.assertEqual(expected_url, properties["원문"]["url"])
         self.assertTrue(properties["읽음"]["checkbox"])
         self.assertEqual("공식", properties["근거 수준"]["select"]["name"])
         self.assertEqual(
