@@ -7,6 +7,7 @@ const state = {
   workflowPollTimer: null,
   workflowWasRunning: false,
   questions: [],
+  archive: [],
   submitConfirmed: false,
 };
 
@@ -130,6 +131,16 @@ async function loadQuestions() {
     select.append(option);
   }
   select.disabled = state.questions.length < 2;
+}
+
+function renderArchive() {
+  el("archive-count").textContent = String(state.archive.length);
+}
+
+async function loadArchive() {
+  const payload = await api("/api/archive");
+  state.archive = payload.attempts || [];
+  renderArchive();
 }
 
 async function switchQuestion(event) {
@@ -260,6 +271,7 @@ function renderAttempt(attempt) {
   el("loading").hidden = true;
   el("answer-view").hidden = true;
   el("result-view").hidden = false;
+  el("question-select").value = attempt.question.id;
   const options = Object.fromEntries(attempt.question.options.map((item) => [item.id, item.label]));
   el("frozen-title").textContent = attempt.question.title;
   const frozen = el("frozen-answer");
@@ -317,6 +329,42 @@ function renderAttempt(attempt) {
     evidence.append(section);
   }
   updateNotionControls(attempt);
+  updateArchiveControls(attempt);
+}
+
+function updateArchiveControls(attempt) {
+  const choice = el("archive-choice");
+  const saved = el("archive-saved");
+  const skipped = localStorage.getItem(`archive-skipped:${attempt.attempt_id}`) === "true";
+  choice.hidden = Boolean(attempt.archived_at) || skipped || !attempt.comparison;
+  saved.hidden = !attempt.archived_at;
+}
+
+async function saveToArchive() {
+  const button = el("archive-save-button");
+  button.disabled = true;
+  clearNotice();
+  try {
+    const attempt = await api(`/api/attempts/${state.attempt.attempt_id}/archive`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    localStorage.removeItem(`archive-skipped:${attempt.attempt_id}`);
+    renderAttempt(attempt);
+    await loadArchive();
+    notice("문제를 보관함에 저장했습니다.", true);
+  } catch (error) {
+    notice(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function skipArchive() {
+  if (!state.attempt) return;
+  localStorage.setItem(`archive-skipped:${state.attempt.attempt_id}`, "true");
+  updateArchiveControls(state.attempt);
+  notice("이번 풀이는 보관함에 저장하지 않았습니다.", true);
 }
 
 function updateNotionControls(attempt) {
@@ -480,6 +528,8 @@ async function initialize() {
   el("complete-button").addEventListener("click", completeAttempt);
   el("retry-button").addEventListener("click", retryNotion);
   el("new-attempt-button").addEventListener("click", newAttempt);
+  el("archive-save-button").addEventListener("click", saveToArchive);
+  el("archive-skip-button").addEventListener("click", skipArchive);
   el("confirm-cancel").addEventListener("click", () => el("confirm-dialog").close());
   el("confirm-submit").addEventListener("click", () => {
     el("confirm-dialog").close();
@@ -488,7 +538,7 @@ async function initialize() {
   });
 
   try {
-    await Promise.all([loadQuestions(), refreshWorkflowStatus()]);
+    await Promise.all([loadQuestions(), loadArchive(), refreshWorkflowStatus()]);
   } catch (error) {
     el("loading").textContent = error.message;
     notice(error.message);

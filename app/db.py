@@ -44,6 +44,14 @@ CREATE TABLE IF NOT EXISTS notion_syncs (
     last_error TEXT,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS archived_attempts (
+    attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,
+    archived_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_archived_attempts_created
+ON archived_attempts(archived_at DESC);
 """
 
 

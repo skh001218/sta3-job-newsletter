@@ -104,7 +104,21 @@ class AttemptView(TypedDict):
     notion_status: str
     notion_url: str | None
     last_error: str | None
+    archived_at: str | None
     notion_sync: NotRequired[dict[str, Any]]
+
+
+class ArchivedAttemptSummary(TypedDict):
+    attempt_id: str
+    archived_at: str
+    created_at: str
+    title: str
+    publisher: str
+    selected_option: str
+    confidence: int
+    question: PublicQuestion
+    response: AttemptAnswer
+    comparison: ComparisonResult
 
 
 class AttemptApplication(Protocol):
@@ -119,6 +133,10 @@ class AttemptApplication(Protocol):
     def retry_comparison(self, attempt_id: str) -> AttemptView: ...
 
     def get(self, attempt_id: str) -> AttemptView: ...
+
+    def archive(self, attempt_id: str) -> AttemptView: ...
+
+    def list_archive(self) -> list[ArchivedAttemptSummary]: ...
 
 
 class AttemptArchive(Protocol):

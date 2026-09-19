@@ -9,6 +9,7 @@ from typing import Any
 
 from .contracts import (
     API_CONTRACT_VERSION,
+    ArchivedAttemptSummary,
     AttemptAnswer,
     AttemptStatus,
     AttemptView,
@@ -138,7 +139,7 @@ class AttemptService:
         if not row:
             raise ServiceError("풀이 기록을 찾을 수 없습니다.", 404)
         if row["status"] == AttemptStatus.COMPARISON_READY:
-            return self._serialize(row)
+            return self.get(attempt_id)
 
         try:
             question = json.loads(row["question_snapshot"])
@@ -194,12 +195,64 @@ class AttemptService:
             sync = connection.execute(
                 "SELECT * FROM notion_syncs WHERE attempt_id = ?", (attempt_id,)
             ).fetchone()
+            archive = connection.execute(
+                "SELECT archived_at FROM archived_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
         if not row:
             raise ServiceError("풀이 기록을 찾을 수 없습니다.", 404)
         result = self._serialize(row)
+        result["archived_at"] = archive["archived_at"] if archive else None
         if sync:
             result["notion_sync"] = dict(sync)
         return result
+
+    def archive(self, attempt_id: str) -> AttemptView:
+        attempt = self.get(attempt_id)
+        if not attempt["comparison"]:
+            raise ServiceError("비교 결과를 확인한 풀이만 보관할 수 있습니다.", 409)
+        archived_at = utc_now()
+        with self.db.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO archived_attempts (attempt_id, archived_at)
+                VALUES (?, ?)
+                ON CONFLICT(attempt_id) DO NOTHING
+                """,
+                (attempt_id, archived_at),
+            )
+        return self.get(attempt_id)
+
+    def list_archive(self) -> list[ArchivedAttemptSummary]:
+        with self.db.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT a.id, a.created_at, a.question_snapshot, a.response_json,
+                       a.comparison_json, ar.archived_at
+                FROM archived_attempts ar
+                JOIN attempts a ON a.id = ar.attempt_id
+                ORDER BY ar.archived_at DESC
+                """
+            ).fetchall()
+        archive: list[ArchivedAttemptSummary] = []
+        for row in rows:
+            question = json.loads(row["question_snapshot"])
+            response = json.loads(row["response_json"])
+            comparison = json.loads(row["comparison_json"])
+            archive.append(
+                {
+                    "attempt_id": row["id"],
+                    "archived_at": row["archived_at"],
+                    "created_at": row["created_at"],
+                    "title": question["title"],
+                    "publisher": question.get("source", {}).get("publisher", "출처 미상"),
+                    "selected_option": response["selected_option"],
+                    "confidence": response["confidence"],
+                    "question": QuestionRepository.public_view(question),
+                    "response": response,
+                    "comparison": comparison,
+                }
+            )
+        return archive
 
     @staticmethod
     def _serialize(row: sqlite3.Row) -> AttemptView:
@@ -217,6 +270,7 @@ class AttemptService:
             "notion_status": row["notion_status"],
             "notion_url": row["notion_url"],
             "last_error": row["last_error"],
+            "archived_at": None,
         }
         return result
 

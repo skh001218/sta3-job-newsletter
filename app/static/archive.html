@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>문제 보관함 · 게임 DA 실전 문제</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/archive.js" defer></script>
+</head>
+<body class="archive-page">
+  <main class="archive-shell">
+    <header class="archive-page-header">
+      <div>
+        <p class="eyebrow">MY QUESTION ARCHIVE</p>
+        <h1>문제 보관함</h1>
+        <p>저장해 둔 문제와 내 판단을 다시 살펴보세요.</p>
+      </div>
+      <a href="/" class="secondary link-button">← 문제 풀러 가기</a>
+    </header>
+
+    <div id="archive-notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <section id="archive-loading" class="card loading">보관함을 불러오는 중…</section>
+    <section id="archive-empty-page" class="card archive-page-empty" hidden>
+      <p class="eyebrow">EMPTY</p>
+      <h2>아직 보관한 문제가 없어요.</h2>
+      <p>문제를 푼 뒤 결과 화면에서 다시 보고 싶은 문제를 보관해 보세요.</p>
+      <a href="/" class="primary link-button">첫 문제 풀러 가기</a>
+    </section>
+
+    <div id="archive-layout" class="archive-layout" hidden>
+      <aside class="archive-index" aria-label="보관한 문제 목록">
+        <div class="archive-index-heading">
+          <span>저장한 문제</span>
+          <strong id="archive-page-count">0</strong>
+        </div>
+        <div id="archive-page-list" class="archive-page-list"></div>
+      </aside>
+
+      <article id="archive-detail" class="archive-detail" aria-live="polite">
+        <div class="archive-detail-head">
+          <p id="archive-detail-source" class="source"></p>
+          <h2 id="archive-detail-title"></h2>
+          <p id="archive-detail-date" class="archive-detail-date"></p>
+        </div>
+
+        <section class="archive-section">
+          <div class="step"><span>01</span> 문제</div>
+          <p id="archive-detail-scenario" class="scenario"></p>
+          <h3 id="archive-detail-prompt"></h3>
+        </section>
+
+        <section class="archive-section">
+          <div class="step"><span>02</span> 내가 했던 답</div>
+          <div id="archive-my-answer" class="detail-grid"></div>
+        </section>
+
+        <section class="archive-section difference-section">
+          <div class="step"><span>03</span> 실제 답과 달랐던 점</div>
+          <div id="archive-difference"></div>
+        </section>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

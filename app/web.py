@@ -24,6 +24,7 @@ ATTEMPT_ROUTE = re.compile(r"^/api/attempts/([0-9a-f-]+)$")
 COMPARISON_RETRY_ROUTE = re.compile(r"^/api/attempts/([0-9a-f-]+)/comparison/retry$")
 COMPLETE_ROUTE = re.compile(r"^/api/attempts/([0-9a-f-]+)/complete$")
 NOTION_RETRY_ROUTE = re.compile(r"^/api/attempts/([0-9a-f-]+)/notion/retry$")
+ARCHIVE_ROUTE = re.compile(r"^/api/attempts/([0-9a-f-]+)/archive$")
 QUESTION_ROUTE = re.compile(r"^/api/questions/([^/]+)$")
 
 
@@ -61,6 +62,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return self._json({"questions": self.server.attempts.list_questions()})
                 if path == "/api/questions/current":
                     return self._json(self.server.attempts.get_public_question())
+                if path == "/api/archive":
+                    return self._json({"attempts": self.server.attempts.list_archive()})
                 if path == "/api/newsletter/status":
                     return self._json(self.server.newsletter.status())
                 match = QUESTION_ROUTE.match(path)
@@ -92,6 +95,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = self.server.newsletter.status()
                 result["started"] = started
                 return self._json(result, status)
+            match = ARCHIVE_ROUTE.match(path)
+            if match:
+                return self._json(self.server.attempts.archive(match.group(1)))
             match = COMPARISON_RETRY_ROUTE.match(path)
             if match:
                 return self._json(self.server.attempts.retry_comparison(match.group(1)))
@@ -164,7 +170,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         files = {
             "/": "index.html",
             "/index.html": "index.html",
+            "/archive": "archive.html",
+            "/archive.html": "archive.html",
             "/app.js": "app.js",
+            "/archive.js": "archive.js",
             "/styles.css": "styles.css",
         }
         filename = files.get(path)

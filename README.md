@@ -8,6 +8,7 @@
 - 제출 시 `attempt_id`를 발급하고 SQLite에 답변 스냅샷을 불변 기록으로 저장
 - 제출·Notion 저장의 중복 클릭을 idempotency key로 방지
 - 비교 생성이나 Notion 저장이 실패해도 확정된 답변은 보존
+- 결과를 확인한 뒤 다시 보고 싶은 풀이만 문제 보관함에 저장
 - Notion 잠시 오류를 위한 지수 백오프 재시도
 - Notion은 읽기 용도의 복제본이며 SQLite가 원본 저장소
 
