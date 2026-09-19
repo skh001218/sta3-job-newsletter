@@ -85,6 +85,24 @@ class AttemptServiceTest(unittest.TestCase):
         with self.assertRaises(ServiceError):
             self.service.submit(payload)
 
+    def test_completed_attempt_can_be_saved_to_archive(self) -> None:
+        attempt = self.service.submit(self.payload())
+        saved = self.service.archive(attempt["attempt_id"])
+        self.assertIsNotNone(saved["archived_at"])
+        archive = self.service.list_archive()
+        self.assertEqual(1, len(archive))
+        self.assertEqual(attempt["attempt_id"], archive[0]["attempt_id"])
+        self.assertEqual(attempt["question"]["title"], archive[0]["title"])
+        self.assertEqual(attempt["response"], archive[0]["response"])
+        self.assertEqual(attempt["comparison"], archive[0]["comparison"])
+
+    def test_saving_same_attempt_to_archive_is_idempotent(self) -> None:
+        attempt = self.service.submit(self.payload())
+        first = self.service.archive(attempt["attempt_id"])
+        second = self.service.archive(attempt["attempt_id"])
+        self.assertEqual(first["archived_at"], second["archived_at"])
+        self.assertEqual(1, len(self.service.list_archive()))
+
     def test_notion_failure_does_not_remove_attempt(self) -> None:
         attempt = self.service.submit(self.payload())
         settings = Settings(
