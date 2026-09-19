@@ -9,15 +9,20 @@
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <div class="hero-topline">
-        <p class="eyebrow">GAME DATA ANALYSIS · PRACTICE</p>
+    <nav class="top-nav" aria-label="주요 메뉴">
+      <a class="brand-link" href="/">GAME DA</a>
+      <div class="top-nav-actions">
         <a href="/archive" class="archive-open">
           문제 보관함 <span id="archive-count">0</span>
         </a>
+        <a class="dashboard-link" href="/dashboard">대시보드 <span aria-hidden="true">→</span></a>
       </div>
-      <h1>실제 결과를 보기 전에<br>당신의 판단을 남겨보세요.</h1>
-      <p class="intro">정답을 맞히는 테스트가 아니라, 불완전한 정보 안에서 어떤 가정을 세우고 판단했는지 기록하는 공간입니다.</p>
+    </nav>
+
+    <header id="main" class="hero">
+      <p class="eyebrow">GAME DATA ANALYSIS · DAILY PRACTICE</p>
+      <h1>실전 문제로<br>판단력을 쌓아보세요.</h1>
+      <p class="intro">게임 데이터 분석 사례를 풀고, 꾸준히 이어온 학습 흐름을 확인하세요.</p>
     </header>
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
