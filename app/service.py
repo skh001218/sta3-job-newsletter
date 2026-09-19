@@ -4,7 +4,8 @@ import hashlib
 import json
 import sqlite3
 import uuid
-from datetime import UTC, datetime
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .contracts import (
@@ -60,6 +61,52 @@ class AttemptService:
             return self.questions.summaries()
         except QuestionError as exc:
             raise ServiceError(str(exc), 404) from exc
+
+    def dashboard(self, now: datetime | None = None) -> dict[str, Any]:
+        """Return the small set of facts needed by the home dashboard.
+
+        A streak stays active until the end of the day after the most recent
+        practice. This lets the dashboard show yesterday's streak before the
+        learner has completed today's question.
+        """
+        local_now = now or datetime.now().astimezone()
+        if local_now.tzinfo is None:
+            local_now = local_now.replace(tzinfo=UTC)
+        local_zone = local_now.tzinfo
+        today = local_now.date()
+
+        with self.db.connect() as connection:
+            rows = connection.execute("SELECT created_at FROM attempts").fetchall()
+
+        daily_counts: Counter = Counter()
+        for row in rows:
+            created_at = datetime.fromisoformat(row["created_at"])
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            daily_counts[created_at.astimezone(local_zone).date()] += 1
+
+        practice_days = set(daily_counts)
+
+        solved_today = today in practice_days
+        cursor = today if solved_today else today - timedelta(days=1)
+        streak = 0
+        while cursor in practice_days:
+            streak += 1
+            cursor -= timedelta(days=1)
+
+        activity = [
+            {
+                "date": (today - timedelta(days=offset)).isoformat(),
+                "count": daily_counts[today - timedelta(days=offset)],
+            }
+            for offset in range(13, -1, -1)
+        ]
+        return {
+            "date": today.isoformat(),
+            "current_streak": streak,
+            "solved_today": solved_today,
+            "daily_counts": activity,
+        }
 
     def submit(self, payload: dict[str, Any]) -> AttemptView:
         idempotency_key = self._required_text(payload, "idempotency_key", 200)

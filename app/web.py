@@ -64,6 +64,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return self._json(self.server.attempts.get_public_question())
                 if path == "/api/archive":
                     return self._json({"attempts": self.server.attempts.list_archive()})
+                if path == "/api/dashboard":
+                    return self._json(self.server.attempts.dashboard())
                 if path == "/api/newsletter/status":
                     return self._json(self.server.newsletter.status())
                 match = QUESTION_ROUTE.match(path)
@@ -172,6 +174,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/index.html": "index.html",
             "/archive": "archive.html",
             "/archive.html": "archive.html",
+            "/dashboard": "dashboard.html",
+            "/dashboard.html": "dashboard.html",
+            "/dashboard.js": "dashboard.js",
             "/app.js": "app.js",
             "/archive.js": "archive.js",
             "/styles.css": "styles.css",

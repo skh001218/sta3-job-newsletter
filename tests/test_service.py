@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.config import Settings
@@ -61,6 +62,49 @@ class AttemptServiceTest(unittest.TestCase):
         self.assertEqual(first["attempt_id"], second["attempt_id"])
         self.assertEqual("COMPARISON_READY", first["status"])
         self.assertTrue(first["comparison"])
+
+    def test_dashboard_streak_stays_active_until_today_is_solved(self) -> None:
+        today = datetime(2026, 9, 19, 9, 0, tzinfo=UTC)
+        attempt = self.service.submit(self.payload())
+        with self.db.connect() as connection:
+            for index, days_ago in enumerate((1, 2, 4), start=1):
+                connection.execute(
+                    """
+                    INSERT INTO attempts (
+                        id, idempotency_key, request_hash, question_id, question_version,
+                        question_snapshot, response_json, status, created_at
+                    )
+                    SELECT ?, ?, ?, question_id, question_version, question_snapshot,
+                           response_json, status, ? FROM attempts WHERE id = ?
+                    """,
+                    (
+                        f"historic-{index}",
+                        f"historic-key-{index}",
+                        f"historic-hash-{index}",
+                        (today - timedelta(days=days_ago)).isoformat(),
+                        attempt["attempt_id"],
+                    ),
+                )
+            connection.execute(
+                "UPDATE attempts SET created_at = ? WHERE id = ?",
+                ((today - timedelta(days=8)).isoformat(), attempt["attempt_id"]),
+            )
+
+        dashboard = self.service.dashboard(now=today)
+        self.assertEqual(2, dashboard["current_streak"])
+        self.assertFalse(dashboard["solved_today"])
+        self.assertEqual(14, len(dashboard["daily_counts"]))
+        self.assertEqual(1, dashboard["daily_counts"][-2]["count"])
+        self.assertEqual(0, dashboard["daily_counts"][-1]["count"])
+        self.assertNotIn("today_question", dashboard)
+
+    def test_dashboard_counts_today_after_submission(self) -> None:
+        now = datetime.now(UTC)
+        self.service.submit(self.payload())
+        dashboard = self.service.dashboard(now=now)
+        self.assertEqual(1, dashboard["current_streak"])
+        self.assertTrue(dashboard["solved_today"])
+        self.assertEqual(1, dashboard["daily_counts"][-1]["count"])
 
     def test_same_key_with_different_answer_is_rejected(self) -> None:
         self.service.submit(self.payload())

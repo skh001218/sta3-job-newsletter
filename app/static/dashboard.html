@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>학습 대시보드 · 게임 DA</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/dashboard.js" defer></script>
+</head>
+<body>
+  <main class="shell dashboard-page">
+    <nav class="top-nav" aria-label="주요 메뉴">
+      <a class="brand-link" href="/">GAME DA</a>
+      <div class="top-nav-actions">
+        <a class="archive-open" href="/archive">문제 보관함</a>
+        <a class="dashboard-link active" href="/dashboard" aria-current="page">대시보드</a>
+      </div>
+    </nav>
+
+    <header class="dashboard-hero">
+      <p class="eyebrow">LEARNING DASHBOARD</p>
+      <h1>꾸준히 쌓인<br>학습의 흐름</h1>
+      <p class="intro">최근 14일 동안 풀어본 문제와 현재 연속 학습일을 확인하세요.</p>
+    </header>
+
+    <div id="dashboard-error" class="notice" role="alert" hidden></div>
+
+    <section class="dashboard-layout" aria-label="학습 현황">
+      <article class="streak-card dashboard-streak">
+        <div class="streak-heading">
+          <p class="dashboard-label">CURRENT STREAK</p>
+          <span id="streak-status" class="status-chip">불러오는 중</span>
+        </div>
+        <div class="streak-value">
+          <span aria-hidden="true" class="flame">●</span>
+          <strong id="streak-count">—</strong>
+          <span>일</span>
+        </div>
+        <p id="streak-message" class="dashboard-muted">학습 기록을 확인하고 있어요.</p>
+      </article>
+
+      <article class="activity-card">
+        <div class="activity-heading">
+          <div>
+            <p class="dashboard-label">DAILY ACTIVITY</p>
+            <h2>날짜별 푼 문제</h2>
+          </div>
+          <p id="activity-total" class="activity-total">최근 14일 · —문제</p>
+        </div>
+        <div id="activity-chart" class="activity-chart" aria-live="polite"></div>
+      </article>
+    </section>
+
+    <a class="back-to-practice" href="/">← 문제 풀이로 돌아가기</a>
+  </main>
+</body>
+</html>

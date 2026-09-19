@@ -536,7 +536,6 @@ async function initialize() {
     state.submitConfirmed = true;
     el("answer-form").requestSubmit();
   });
-
   try {
     await Promise.all([loadQuestions(), loadArchive(), refreshWorkflowStatus()]);
   } catch (error) {
